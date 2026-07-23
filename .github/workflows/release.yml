@@ -18,7 +18,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Reuse verified IR from the successful bootstrap job
-        run: gh run download 30037794462 --repo "$GITHUB_REPOSITORY" --name trusted-bootstrap-ir --dir target
+        run: gh run download 30039870886 --repo "$GITHUB_REPOSITORY" --name trusted-bootstrap-ir --dir target
       - uses: actions/upload-artifact@v7
         with:
           name: trusted-bootstrap-ir
@@ -31,6 +31,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            executable: encore
+          - os: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+            executable: encore
+          - os: macos-15-intel
+            triple: x86_64-apple-darwin
+            executable: encore
+          - os: macos-15
+            triple: aarch64-apple-darwin
+            executable: encore
           - os: windows-latest
             triple: x86_64-pc-windows-msvc
             executable: encore.exe
@@ -78,28 +90,6 @@ jobs:
             "${platform_links[@]}" \
             -o "target/seed/${{ matrix.executable }}"
           "target/seed/${{ matrix.executable }}" --version
-      - name: Materialize registry cache on Windows
-        if: matrix.triple == 'x86_64-pc-windows-msvc'
-        shell: bash
-        run: |
-          set -euo pipefail
-          awk '
-            function emit() {
-              if (name != "" && archive != "") print name "\t" version "\t" checksum "\t" archive
-            }
-            /^\[\[packages\]\]$/ { emit(); name=version=checksum=archive=""; next }
-            /^name = / { name=$3; gsub(/"/, "", name) }
-            /^version = / { version=$3; gsub(/"/, "", version) }
-            /^checksum = / { checksum=$3; gsub(/"/, "", checksum) }
-            /^archive = / { archive=$3; gsub(/"/, "", archive) }
-            END { emit() }
-          ' encore.lock |
-          while IFS=$'\t' read -r name version checksum archive; do
-            destination="$PWD/target/registry/packages/$name/$version-$checksum"
-            mkdir -p "$destination"
-            curl --fail --location --retry 5 "$archive" -o target/package.tar.gz
-            tar -xzf target/package.tar.gz -C "$destination"
-          done
       - name: Verify byte-identical self-host
         shell: bash
         run: |
@@ -127,7 +117,7 @@ jobs:
               source="$ENCORE_CORE_DIR"
               destination=core
             else
-              source=$(find "$ENCORE_REGISTRY_CACHE/packages/$name" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+              source=$(find "$PWD/target/registry/packages/$name" -mindepth 1 -maxdepth 1 -type d | head -n 1)
               destination=$name
               case "$name" in ehirlib) destination=ehir ;; ehir_llvm_backend) destination=ehir-llvm-backend ;; esac
             fi
