@@ -5,7 +5,7 @@ import core::result::Result
 import core::vec::Vec
 import json::{Json, ParseError, parse}
 import std::io::println
-import std::os::{env, file_exists, home_dir, mkdir_all, read_file, remove_file, write_file}
+import std::os::{env, file_exists, file_sha256, home_dir, mkdir_all, read_file, remove_file, write_file}
 import std::path::Path
 import std::process::{run_args, run_args_capture}
 import mod::manifest::{project_manifest_name, project_manifest_version, read_project_manifest}
@@ -673,7 +673,7 @@ fn install_package(name: str, version: RegistryVersion) -> str {
         registry_error("Unable to download " + name + " " + version.version)
         ret ""
     }
-    if file_sha256(archive) != version.checksum {
+    if file_sha256(archive.as_str()) != version.checksum {
         remove_file(archive.as_str())
         registry_error("Checksum mismatch for " + name + " " + version.version)
         ret ""
@@ -744,25 +744,6 @@ fn download(url: str, destination: Path) -> i32 {
     args.push(destination.as_str())
     args.push(url)
     ret run_args("curl", args)
-}
-
-fn file_sha256(path: Path) -> str {
-    let output = registry_root().join("sha256.out")
-    let mut args = Vec[str]::new()
-    args.push(path.as_str())
-    let mut code = run_args_capture("sha256sum", args, output.as_str())
-    if code != 0_i32 {
-        args = Vec[str]::new()
-        args.push("-a")
-        args.push("256")
-        args.push(path.as_str())
-        code = run_args_capture("shasum", args, output.as_str())
-    }
-    if code != 0_i32 { remove_file(output.as_str()) ret "" }
-    let value = read_file(output.as_str())
-    remove_file(output.as_str())
-    if value.len() < 64_usize { ret "" }
-    ret value.slice(0_usize, 64_usize)
 }
 
 fn lock_package_block(source: str, reference: str) -> str {
