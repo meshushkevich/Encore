@@ -15,75 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENCORE_REGISTRY_CACHE: ${{ github.workspace }}/target/registry
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Recover and verify historical stage0
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p target/stage0 target/core
-          git show origin/trunk:bootstrap/encore-stage0-linux-x86_64.gz > target/stage0/encore.gz
-          expected=$(git show origin/trunk:bootstrap/encore-stage0-linux-x86_64.sha256 | awk 'NF {print $1; exit}')
-          test "$(sha256sum target/stage0/encore.gz | awk '{print $1}')" = "$expected"
-          gzip -dc target/stage0/encore.gz > target/stage0/encore
-          chmod +x target/stage0/encore
-          curl --fail --location --retry 5 "$CORE_ARCHIVE" -o target/core.tar.gz
-          tar -xzf target/core.tar.gz -C target/core
-          echo "ENCORE_CORE_DIR=$PWD/target/core" >> "$GITHUB_ENV"
-      - name: Materialize path dependencies understood by historical stage0
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p target/bootstrap-index
-          for spec in \
-            std:std-1.0.0 \
-            rich:rich-1.0.0 \
-            json:json-1.0.0 \
-            ehirlib:ehirlib-0.0.0 \
-            ehir_llvm_backend:ehir_llvm_backend-0.0.0 \
-            toml:toml-1.0.0 \
-            colorterm:colorterm-1.0.0 \
-            log:log-1.0.0 \
-            llvm:llvm-0.0.0
-          do
-            destination=${spec%%:*}
-            archive=${spec#*:}
-            mkdir -p "target/bootstrap-index/$destination"
-            curl --fail --location --retry 5 \
-              "https://github.com/encore-ecosystem/encore-index/releases/download/packages-v0.1.4/$archive.tar.gz" \
-              -o "target/$archive.tar.gz"
-            tar -xzf "target/$archive.tar.gz" -C "target/bootstrap-index/$destination"
-          done
-          sed -i \
-            -e 's|index@std@1.0.0|path@target/bootstrap-index/std|g' \
-            -e 's|index@rich@1.0.0|path@target/bootstrap-index/rich|g' \
-            -e 's|index@json@1.0.0|path@target/bootstrap-index/json|g' \
-            -e 's|index@ehirlib@0.0.0|path@target/bootstrap-index/ehirlib|g' \
-            -e 's|index@ehir_llvm_backend@0.0.0|path@target/bootstrap-index/ehir_llvm_backend|g' \
-            -e 's|index@toml@1.0.0|path@target/bootstrap-index/toml|g' \
-            -e 's|index@colorterm@1.0.0|path@target/bootstrap-index/colorterm|g' \
-            encore.toml
-          for manifest in target/bootstrap-index/*/encore.toml; do
-            sed -i \
-              -e 's|index@std@1.0.0|path@../std|g' \
-              -e 's|index@json@1.0.0|path@../json|g' \
-              -e 's|index@ehirlib@0.0.0|path@../ehirlib|g' \
-              -e 's|index@llvm@0.0.0|path@../llvm|g' \
-              -e 's|index@colorterm@1.0.0|path@../colorterm|g' \
-              -e 's|index@log@1.0.0|path@../log|g' \
-              "$manifest"
-          done
-      - name: Generate current compiler IR for every trusted target
-        shell: bash
-        run: |
-          set -euo pipefail
-          for triple in \
-            x86_64-pc-windows-msvc
-          do
-            target/stage0/encore build --profile extreme --target "$triple" --emit llvm-ir
-          done
+      - name: Reuse verified IR from the successful bootstrap job
+        run: gh run download 30043434736 --repo "$GITHUB_REPOSITORY" --name trusted-bootstrap-ir --dir target
       - uses: actions/upload-artifact@v7
         with:
           name: trusted-bootstrap-ir
@@ -144,6 +79,7 @@ jobs:
             -o "target/seed/${{ matrix.executable }}"
           "target/seed/${{ matrix.executable }}" --version
       - name: Materialize registry cache on Windows
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
         shell: bash
         run: |
           set -euo pipefail
@@ -204,7 +140,7 @@ jobs:
           case "${{ matrix.triple }}" in
             *-windows-*)
               archive="$PWD/dist/encore-${{ matrix.triple }}.zip"
-              (cd target/package && COPYFILE_DISABLE=1 tar -a -cf "$archive" "$package")
+              (cd target/package && 7z a -tzip -mtc=off -mta=off "$archive" "$package")
               ;;
             *)
               archive="$PWD/dist/encore-${{ matrix.triple }}.tar.gz"
