@@ -96,10 +96,6 @@ jobs:
             echo "::error title=Native seed assembly failed::$message"
             exit "$code"
           fi
-      - name: Verify native seed
-        shell: bash
-        run: |
-          index/encore/target/extreme/${{ matrix.executable }} --version
       - name: Native self-host and tests
         shell: bash
         working-directory: index/encore

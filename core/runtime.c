@@ -1452,6 +1452,35 @@ static void encore_init_args(void) {
     g_args_initialized = true;
     atexit(encore_free_args);
 
+#ifdef _WIN32
+#ifdef __MINGW32__
+    int argc = __argc;
+    char **argv = __argv;
+#else
+    int argc = *__p___argc();
+    char **argv = *__p___argv();
+#endif
+    if (argc <= 0 || argv == NULL) {
+        return;
+    }
+    g_argc = (size_t)argc;
+    g_argv = calloc(g_argc, sizeof(char *));
+    if (g_argv == NULL) {
+        g_argc = 0;
+        return;
+    }
+    for (size_t i = 0; i < g_argc; ++i) {
+        if (argv[i] != NULL) {
+            size_t len = strlen(argv[i]);
+            g_argv[i] = malloc(len + 1);
+            if (g_argv[i] != NULL) {
+                memcpy(g_argv[i], argv[i], len + 1);
+            }
+        }
+    }
+    return;
+#endif
+
 #ifdef __APPLE__
     int argc = *_NSGetArgc();
     char **argv = *_NSGetArgv();
