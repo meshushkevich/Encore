@@ -681,7 +681,7 @@ fn install_package(name: str, version: RegistryVersion) -> str {
     let listing = registry_root().join("archive-list.out")
     let mut list_args = Vec[str]::new()
     list_args.push("-tzf")
-    list_args.push(archive.as_str())
+    list_args.push(portable_tool_path(archive.as_str()))
     if run_args_capture("tar", list_args, listing.as_str()) != 0_i32 || !archive_paths_safe(read_file(listing.as_str())) {
         remove_file(listing.as_str())
         registry_error("Unsafe package archive for " + name + " " + version.version)
@@ -691,7 +691,7 @@ fn install_package(name: str, version: RegistryVersion) -> str {
     let types = registry_root().join("archive-types.out")
     let mut type_args = Vec[str]::new()
     type_args.push("-tvzf")
-    type_args.push(archive.as_str())
+    type_args.push(portable_tool_path(archive.as_str()))
     if run_args_capture("tar", type_args, types.as_str()) != 0_i32 || !archive_entry_types_safe(read_file(types.as_str())) {
         remove_file(types.as_str())
         registry_error("Package archive contains links or special files for " + name + " " + version.version)
@@ -700,9 +700,9 @@ fn install_package(name: str, version: RegistryVersion) -> str {
     remove_file(types.as_str())
     let mut extract_args = Vec[str]::new()
     extract_args.push("-xzf")
-    extract_args.push(archive.as_str())
+    extract_args.push(portable_tool_path(archive.as_str()))
     extract_args.push("-C")
-    extract_args.push(package_root.as_str())
+    extract_args.push(portable_tool_path(package_root.as_str()))
     if run_args("tar", extract_args) != 0_i32 || !file_exists(package_root.join("encore.toml").as_str()) {
         registry_error("Invalid package archive for " + name + " " + version.version + ": encore.toml must be at the archive root")
         ret ""
@@ -817,6 +817,18 @@ fn archive_paths_safe(listing: str) -> bool {
         start = end + 1_usize
     }
     ret true
+}
+
+fn portable_tool_path(value: str) -> str {
+    let mut result = ""
+    let mut index = 0_usize
+    while index < value.len() {
+        let part = value.slice(index, 1_usize)
+        if part == "\\" { result = result + "/" }
+        else { result = result + part }
+        index = index + 1_usize
+    }
+    ret result
 }
 
 fn archive_entry_types_safe(listing: str) -> bool {
