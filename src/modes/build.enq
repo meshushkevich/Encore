@@ -850,6 +850,7 @@ fn append_profile_link_args(args: mut Vec[str], profile: str, target: TargetSpec
         args.push("-falign-loops=32")
         if target.os != "macos" { args.push("-fuse-ld=lld") }
         if target.os == "linux" { args.push("-Wl,--mllvm=-align-loops=32") }
+        elif target.os == "windows" { args.push("-Wl,/Brepro") }
     }
     append_tls_link_args(args, target)
     ret ()
